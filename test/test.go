@@ -8,7 +8,7 @@ import (
 func main() {
 	r := gin.New()
 
-	r.GET("/", ratelimiter.Limiter(3)(func(ctx *gin.Context) {
+	r.GET("/", ratelimiter.Limiter(3, 1)(func(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{"msg": "ok"})
 	}))
 

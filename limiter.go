@@ -3,8 +3,8 @@ package ratelimiter
 import "github.com/gin-gonic/gin"
 
 // Limiter 限流装饰器
-func Limiter(cap int) func(handler gin.HandlerFunc) gin.HandlerFunc {
-	rl := NewBucket(cap)
+func Limiter(cap, limiter int) func(handler gin.HandlerFunc) gin.HandlerFunc {
+	rl := NewBucket(cap, limiter)
 	return func(handler gin.HandlerFunc) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			if rl.Allow() {
