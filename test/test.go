@@ -12,5 +12,9 @@ func main() {
 		ctx.JSON(200, gin.H{"msg": "ok"})
 	})))
 
+	r.GET("/byip", ratelimiter.IPLimiter(3, 1)(func(ctx *gin.Context) {
+		ctx.JSON(200, gin.H{"msg": "by ip"})
+	}))
+
 	r.Run(":8081")
 }
