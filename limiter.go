@@ -26,3 +26,18 @@ func Limiter(cap, limiter int64) func(handler gin.HandlerFunc) gin.HandlerFunc {
 		}
 	}
 }
+
+// ParamLimiter 参数限流
+func ParamLimiter(cap, limiter int64, param string) func(handler gin.HandlerFunc) gin.HandlerFunc {
+	rl := NewBucket(cap, limiter)
+	return func(handler gin.HandlerFunc) gin.HandlerFunc {
+		return func(c *gin.Context) {
+			if c.Query(param) != "" && !rl.Allow() {
+				c.AbortWithStatusJSON(429, gin.H{"message": "too many requests"})
+				return
+			}
+
+			handler(c)
+		}
+	}
+}
