@@ -4,15 +4,20 @@ import (
 	"container/list"
 	"fmt"
 	"sync"
+	"time"
 )
 
+// InfDuration is the duration returned by Delay when a Reservation is not OK.
+const InfDuration = time.Duration(1<<63 - 1)
+
 type cacheData struct {
-	key   string
-	value interface{}
+	key      string
+	value    interface{}
+	expireAt time.Time
 }
 
-func newCacheData(key string, value interface{}) *cacheData {
-	return &cacheData{key: key, value: value}
+func newCacheData(key string, value interface{}, expireAt time.Time) *cacheData {
+	return &cacheData{key: key, value: value, expireAt: expireAt}
 }
 
 type CacheOption func(cache *Cache)
@@ -42,14 +47,21 @@ func NewCache(opts ...CacheOption) *Cache {
 	cache := &Cache{elist: list.New(), edata: make(map[string]*list.Element)}
 	// 应用可变参数
 	CacheOptions(opts).apply(cache)
+	cache.clearExpired()
 	return cache
 }
 
-func (this *Cache) Add(key string, value interface{}) {
+func (this *Cache) Add(key string, value interface{}, ttl time.Duration) {
 	this.mu.Lock()
 	defer this.mu.Unlock()
 
-	newCache := newCacheData(key, value)
+	var setExpire time.Time
+	if ttl == 0 { // 0代表不过期
+		setExpire = time.Now().Add(InfDuration)
+	} else {
+		setExpire = time.Now().Add(ttl)
+	}
+	newCache := newCacheData(key, value, setExpire)
 
 	if getV, ok := this.edata[key]; ok {
 		getV.Value = newCache
@@ -70,10 +82,19 @@ func (this *Cache) Get(key string) interface{} {
 	defer this.mu.Unlock()
 
 	if getV, ok := this.edata[key]; ok {
+		// 判断是否过期
+		if time.Now().After(getV.Value.(*cacheData).expireAt) {
+			this.removeItem(getV)
+			return nil
+		}
 		this.elist.MoveToFront(getV)
 		return getV.Value.(*cacheData).value
 	}
 	return nil
+}
+
+func (this *Cache) Length() int {
+	return len(this.edata)
 }
 
 // 末位淘汰一个缓存
@@ -85,6 +106,20 @@ func (this *Cache) removeOldest() {
 	this.removeItem(back)
 }
 
+// 定时清理过期的缓存
+func (this *Cache) clearExpired() {
+	go func() {
+		for {
+			for _, ele := range this.edata {
+				if ele.Value.(*cacheData).expireAt.Before(time.Now()) {
+					this.removeItem(ele)
+				}
+			}
+			time.Sleep(time.Second * 1)
+		}
+	}()
+}
+
 func (this *Cache) removeItem(ele *list.Element) {
 	key := ele.Value.(*cacheData).key
 	delete(this.edata, key) // 删除map元素
@@ -94,7 +129,12 @@ func (this *Cache) removeItem(ele *list.Element) {
 func (this *Cache) Print() {
 	elist := this.elist.Front()
 	for elist != nil {
-		fmt.Println(elist.Value.(*cacheData).value)
+		// fmt.Println(elist.Value.(*cacheData).value)
+		getKey := elist.Value.(*cacheData).key
+		fmt.Println(getKey, this.Get(getKey))
+		//fmt.Println(this.Get(elist.Value.(*cacheData).key))
 		elist = elist.Next()
+		fmt.Println("------|||-----", elist)
+		time.Sleep(time.Second * 1)
 	}
 }
