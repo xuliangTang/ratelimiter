@@ -3,7 +3,7 @@ package ratelimiter
 import (
 	"context"
 	"github.com/gin-gonic/gin"
-	"sync"
+	"ratelimiter/lru"
 	"time"
 )
 
@@ -46,22 +46,25 @@ func ParamLimiter(cap, limiter int64, param string) func(handler gin.HandlerFunc
 var IpLimiterCache *LimiterCache
 
 type LimiterCache struct {
-	data sync.Map // key:ip value:*Bucket
+	//data sync.Map // key:ip value:*Bucket
+	data *lru.Cache
 }
 
 func init() {
-	IpLimiterCache = &LimiterCache{}
+	IpLimiterCache = &LimiterCache{data: lru.NewCache(lru.WithSize(100))}
 }
+
+const ipCacheTTL = time.Second * 5
 
 // FindOrCreate 根据ip获取bucket对象，没有则创建
 func (this *LimiterCache) FindOrCreate(ip string, cap, limiter int64) *Bucket {
-	if getBucket, ok := this.data.Load(ip); ok {
-		return getBucket.(*Bucket)
+	getBucket := this.data.Get(ip)
+	if getBucket == nil {
+		bucket := NewBucket(cap, limiter)
+		this.data.Add(ip, bucket, ipCacheTTL)
+		getBucket = bucket
 	}
-
-	bucket := NewBucket(cap, limiter)
-	this.data.Store(ip, bucket)
-	return bucket
+	return getBucket.(*Bucket)
 }
 
 // IPLimiter 根据IP限流

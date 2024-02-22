@@ -88,6 +88,9 @@ func (this *Cache) Get(key string) interface{} {
 			return nil
 		}
 		this.elist.MoveToFront(getV)
+
+		// TODO 命中自动续期
+
 		return getV.Value.(*cacheData).value
 	}
 	return nil
